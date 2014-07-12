@@ -700,9 +700,6 @@ var commands = exports.commands = {
 				if (typeMod === -1) resistances.push(type);
 				if (typeMod === -2) resistances.push("<b>" + type + "</b>");
 			}
-			else if ((this.getImmunity(type, pokemon))) {
-				resistances.push("<i>" + type + "</i>");
-			}
 		});
 
 		if (!resistances.length) {
