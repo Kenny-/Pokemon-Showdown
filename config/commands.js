@@ -701,9 +701,6 @@ var commands = exports.commands = {
 				if (typeMod === -2) resistances.push("<b>" + type + "</b>");
 			}
 			
-			if(Tools.getImmunity(type, pokemon) === false) {
-				this.sendReplyBox("" + target + " è immune a " + type + ".");
-			}
 		});
 
 		if (!resistances.length) {
