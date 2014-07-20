@@ -107,9 +107,9 @@ var getExactUser = Users.getExact = function(name) {
  * Routing
  *********************************************************/
 
-var connections = exports.connections = {};
+var connections = Users.connections = Object.create(null);
 
-function socketConnect(worker, workerid, socketid, ip) {
+Users.socketConnect = function(worker, workerid, socketid, ip) {
 	var id = '' + workerid + '-' + socketid;
 	var connection = connections[id] = new Connection(id, worker, socketid, null, ip);
 
@@ -169,9 +169,9 @@ function socketConnect(worker, workerid, socketid, ip) {
 			if (connection.user) connection.user.lock(true);
 		}
 	});
-}
+};
 
-function socketDisconnect(worker, workerid, socketid) {
+Users.socketDisconnect = function(worker, workerid, socketid) {
 	var id = '' + workerid + '-' + socketid;
 
 	var connection = connections[id];
@@ -179,7 +179,7 @@ function socketDisconnect(worker, workerid, socketid) {
 	connection.onDisconnect();
 }
 
-function socketReceive(worker, workerid, socketid, message) {
+Users.socketReceive = function(worker, workerid, socketid, message) {
 	var id = '' + workerid + '-' + socketid;
 
 	var connection = connections[id];
@@ -227,10 +227,10 @@ function socketReceive(worker, workerid, socketid, message) {
 }
 
 /*********************************************************
- * User functions
+ * User groups
  *********************************************************/
 
-var usergroups = {};
+var usergroups = Users.usergroups = Object.create(null);
 function importUsergroups() {
 	// can't just say usergroups = {} because it's exported
 	for (var i in usergroups) delete usergroups[i];
@@ -254,30 +254,50 @@ function exportUsergroups() {
 }
 importUsergroups();
 
-var bannedWords = {};
-function importBannedWords() {
-	fs.readFile('config/bannedwords.txt', function (err, data) {
-		if (err) return;
-		data = ('' + data).split("\n");
-		bannedWords = {};
-		for (var i = 0; i < data.length; i++) {
-			if (!data[i]) continue;
-			bannedWords[data[i]] = true;
+Users.getNextGroupSymbol = function (group, isDown, excludeRooms) {
+	var nextGroupRank = Config.groupsranking[Config.groupsranking.indexOf(group) + (isDown ? -1 : 1)];
+	if (excludeRooms === true && Config.groups[nextGroupRank]) {
+		var iterations = 0;
+		while (Config.groups[nextGroupRank].roomonly && iterations < 10) {
+			nextGroupRank = Config.groupsranking[Config.groupsranking.indexOf(group) + (isDown ? -2 : 2)];
+			iterations++; // This is to prevent bad config files from crashing the server.
 		}
-	});
-}
-function exportBannedWords() {
-	fs.writeFile('config/bannedwords.txt', Object.keys(bannedWords).join('\n'));
-}
-function addBannedWord(word) {
-	bannedWords[word] = true;
-	exportBannedWords();
-}
-function removeBannedWord(word) {
-	delete bannedWords[word];
-	exportBannedWords();
-}
-importBannedWords();
+	}
+	if (!nextGroupRank) {
+		if (isDown) {
+			return Config.groupsranking[0];
+		} else {
+			return Config.groupsranking[Config.groupsranking.length - 1];
+		}
+	}
+	return nextGroupRank;
+};
+
+Users.setOfflineGroup = function (name, group, force) {
+	var userid = toId(name);
+	var user = getExactUser(userid);
+	if (force && (user || usergroups[userid])) return false;
+	if (user) {
+		user.setGroup(group);
+		return true;
+	}
+	if (!group || group === Config.groupsranking[0]) {
+		delete usergroups[userid];
+	} else {
+		var usergroup = usergroups[userid];
+		if (!usergroup && !force) return false;
+		name = usergroup ? usergroup.substr(1) : name;
+		usergroups[userid] = group + name;
+	}
+	exportUsergroups();
+	return true;
+};
+
+Users.importUsergroups = importUsergroups;
+
+/*********************************************************
+ * User and Connection classes
+ *********************************************************/
 
 // User
 var User = (function () {
@@ -627,12 +647,6 @@ var User = (function () {
 			this.send('|nametaken|' + "|You did not specify a name.");
 			return false;
 		} else {
-			for (var w in bannedWords) {
-				if (userid.indexOf(w) >= 0) {
-					this.send('|nametaken|' + "|That name contains a banned word or phrase.");
-					return false;
-				}
-			}
 			if (userid === this.userid && !auth) {
 				return this.forceRename(name, this.authenticated, this.forceRenamed);
 			}
@@ -763,6 +777,10 @@ var User = (function () {
 					this.autoconfirmed = userid;
 				} else if (body === '4') {
 					this.autoconfirmed = userid;
+				} else if (body === '5') {
+					this.lock();
+				} else if (body === '6') {
+					this.ban();
 				}
 			}
 			if (users[userid] && users[userid] !== this) {
@@ -1419,8 +1437,24 @@ var Connection = (function () {
 	return Connection;
 })();
 
-// ban functions
+Users.User = User;
+Users.Connection = Connection;
 
+/*********************************************************
+ * Locks and bans
+ *********************************************************/
+
+var bannedIps = Users.bannedIps = Object.create(null);
+var bannedUsers = Object.create(null);
+var lockedIps = Users.lockedIps = Object.create(null);
+var lockedUsers = Object.create(null);
+
+/**
+ * Searches for IP in table.
+ *
+ * For instance, if IP is '1.2.3.4', will return the value corresponding
+ * to any of the keys in table match '1.2.3.4', '1.2.3.*', '1.2.*', or '1.*'
+ */
 function ipSearch(ip, table) {
 	if (table[ip]) return table[ip];
 	var dotIndex = ip.lastIndexOf('.');
@@ -1437,9 +1471,11 @@ function checkBanned(ip) {
 function checkLocked(ip) {
 	return ipSearch(ip, lockedIps);
 }
-exports.checkBanned = checkBanned;
-exports.checkLocked = checkLocked;
-exports.checkRangeBanned = function () {};
+Users.checkBanned = checkBanned;
+Users.checkLocked = checkLocked;
+
+// Defined in commands.js
+Users.checkRangeBanned = function () {};
 
 function unban(name) {
 	var success;
@@ -1492,73 +1528,16 @@ function unlock(name, unlocked, noRecurse) {
 	}
 	return unlocked;
 }
-exports.unban = unban;
-exports.unlock = unlock;
+Users.unban = unban;
+Users.unlock = unlock;
 
-exports.User = User;
-exports.Connection = Connection;
-exports.get = getUser;
-exports.getExact = getExactUser;
-exports.searchUser = searchUser;
+/*********************************************************
+ * Inactive user pruning
+ *********************************************************/
 
-exports.socketConnect = socketConnect;
-exports.socketDisconnect = socketDisconnect;
-exports.socketReceive = socketReceive;
-
-exports.importUsergroups = importUsergroups;
-exports.addBannedWord = addBannedWord;
-exports.removeBannedWord = removeBannedWord;
-
-exports.users = users;
-exports.prevUsers = prevUsers;
-
-exports.bannedIps = bannedIps;
-exports.lockedIps = lockedIps;
-
-exports.usergroups = usergroups;
-
-exports.pruneInactive = User.pruneInactive;
-exports.pruneInactiveTimer = setInterval(
+Users.pruneInactive = User.pruneInactive;
+Users.pruneInactiveTimer = setInterval(
 	User.pruneInactive,
 	1000 * 60 * 30,
 	Config.inactiveuserthreshold || 1000 * 60 * 60
 );
-
-exports.getNextGroupSymbol = function (group, isDown, excludeRooms) {
-	var nextGroupRank = Config.groupsranking[Config.groupsranking.indexOf(group) + (isDown ? -1 : 1)];
-	if (excludeRooms === true && Config.groups[nextGroupRank]) {
-		var iterations = 0;
-		while (Config.groups[nextGroupRank].roomonly && iterations < 10) {
-			nextGroupRank = Config.groupsranking[Config.groupsranking.indexOf(group) + (isDown ? -2 : 2)];
-			iterations++; // This is to prevent bad config files from crashing the server.
-		}
-	}
-	if (!nextGroupRank) {
-		if (isDown) {
-			return Config.groupsranking[0];
-		} else {
-			return Config.groupsranking[Config.groupsranking.length - 1];
-		}
-	}
-	return nextGroupRank;
-};
-
-exports.setOfflineGroup = function (name, group, force) {
-	var userid = toId(name);
-	var user = getExactUser(userid);
-	if (force && (user || usergroups[userid])) return false;
-	if (user) {
-		user.setGroup(group);
-		return true;
-	}
-	if (!group || group === Config.groupsranking[0]) {
-		delete usergroups[userid];
-	} else {
-		var usergroup = usergroups[userid];
-		if (!usergroup && !force) return false;
-		name = usergroup ? usergroup.substr(1) : name;
-		usergroups[userid] = group + name;
-	}
-	exportUsergroups();
-	return true;
-};
