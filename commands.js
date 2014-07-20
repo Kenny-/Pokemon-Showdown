@@ -1216,6 +1216,52 @@ var commands = exports.commands = {
 		}
 	},
 
+	lockdt: 'lockdetails',
+	lockdetails: function (target, room, user) {
+		if (!this.can('lock')) return false;
+		var targetUser = Users.get(target);
+		if (!targetUser) return this.sendReply("User '" + target + "' does not exist.");
+		if (!targetUser.locked) return this.sendReply("User '" + targetUser.name + "' was not locked from chat.");
+		var canIp = user.can('ip', targetUser);
+		for (var ip in targetUser.ips) {
+			if (Dnsbl.cache[ip]) return this.sendReply("User '" + targetUser.name + "' is locked due to their IP " + (canIp ? "(" + ip + ") " : "") + "being in a DNS-based blacklist" + (canIp ? " (" + Dnsbl.cache[ip] + ")." : "."));
+		}
+		return this.sendReply("User '" + targetUser.name + "' is locked for unknown reasons. Check their modlog?");
+	},
+
+	b: 'ban',
+	ban: function (target, room, user) {
+		if (!target) return this.parse('/help ban');
+		if (user.locked || user.mutedRooms[room.id]) return this.sendReply("You cannot do this while unable to talk.");
+
+		target = this.splitTarget(target);
+		var targetUser = this.targetUser;
+		if (!targetUser) return this.sendReply("User '" + this.targetUsername + "' does not exist.");
+		if (target.length > MAX_REASON_LENGTH) {
+			return this.sendReply("The reason is too long. It cannot exceed " + MAX_REASON_LENGTH + " characters.");
+		}
+		if (!this.can('ban', targetUser)) return false;
+
+		if (Users.checkBanned(targetUser.latestIp) && !target && !targetUser.connected) {
+			var problem = " but was already banned";
+			return this.privateModCommand("(" + targetUser.name + " would be banned by " + user.name + problem + ".)");
+		}
+
+		targetUser.popup("" + user.name + " has banned you." + (Config.appealurl ? (" If you feel that your banning was unjustified you can appeal the ban:\n" + Config.appealurl) : "") + "\n\n" + target);
+
+		this.addModCommand("" + targetUser.name + " was banned by " + user.name + "." + (target ? " (" + target + ")" : ""), " (" + targetUser.latestIp + ")");
+		var alts = targetUser.getAlts();
+		if (alts.length) {
+			this.privateModCommand("(" + targetUser.name + "'s alts were also banned: " + alts.join(", ") + ")");
+			for (var i = 0; i < alts.length; ++i) {
+				this.add('|unlink|' + toId(alts[i]));
+			}
+		}
+
+		this.add('|unlink|' + this.getLastIdOf(targetUser));
+		targetUser.ban();
+	},
+
 	unban: function (target, room, user) {
 		if (!target) return this.parse('/help unban');
 		if (user.locked || user.mutedRooms[room.id]) return this.sendReply("You cannot do this while unable to talk.");
@@ -1605,8 +1651,8 @@ var commands = exports.commands = {
 				CommandParser = require('./command-parser.js');
 
 				var runningTournaments = Tournaments.tournaments;
-				CommandParser.uncacheTree('./tournaments/middleend.js');
-				Tournaments = require('./tournaments/middleend.js');
+				CommandParser.uncacheTree('./tournaments');
+				Tournaments = require('./tournaments');
 				Tournaments.tournaments = runningTournaments;
 
 				return this.sendReply("Chat commands have been hot-patched.");
@@ -1618,8 +1664,8 @@ var commands = exports.commands = {
 
 			try {
 				var runningTournaments = Tournaments.tournaments;
-				CommandParser.uncacheTree('./tournaments/middleend.js');
-				Tournaments = require('./tournaments/middleend.js');
+				CommandParser.uncacheTree('./tournaments');
+				Tournaments = require('./tournaments');
 				Tournaments.tournaments = runningTournaments;
 				return this.sendReply("Tournaments have been hot-patched.");
 			} catch (e) {
