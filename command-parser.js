@@ -131,8 +131,10 @@ var parse = exports.parse = function (message, room, user, connection, levelsDee
 			},
 			privateModCommand: function (data) {
 				for (var i in room.users) {
-					if (room.users[i].isStaff) {
-						room.users[i].sendTo(room, data);
+					var user = room.users[i];
+					// hardcoded for performance reasonss (this is an inner loop)
+					if (user.isStaff || (room.auth && (room.auth[user.userid] || '+') !== '+')) {
+						user.sendTo(room, data);
 					}
 				}
 				this.logEntry(data);
@@ -197,6 +199,18 @@ var parse = exports.parse = function (message, room, user, connection, levelsDee
 				var innerRoom = (relevantRoom !== undefined) ? relevantRoom : room;
 				return canTalk(user, innerRoom, connection, message);
 			},
+			canHTML: function (html) {
+				html = ''+(html||'');
+				var images = html.match(/<img\b[^<>]*/ig);
+				if (!images) return true;
+				for (var i = 0; i < images.length; i++) {
+					if (!/width=([0-9]+|"[0-9]+")/i.test(images[i]) || !/height=([0-9]+|"[0-9]+")/i.test(images[i])) {
+						this.sendReply('All images must have a width and height attribute');
+						return false;
+					}
+				}
+				return true;
+			},
 			targetUserOrSelf: function (target, exactName) {
 				if (!target) {
 					this.targetUsername = user.name;
@@ -233,12 +247,46 @@ var parse = exports.parse = function (message, room, user, connection, levelsDee
 
 		if (message.substr(0, 1) === '/' && cmd) {
 			// To guard against command typos, we now emit an error message
-			return connection.sendTo(room.id, "The command '/" + cmd + "' was unrecognized. To send a message starting with '" + cmd + "', type '//" + cmd + "'.");
+			return connection.sendTo(room.id, "The command '/" + cmd + "' was unrecognized. To send a message starting with '/" + cmd + "', type '//" + cmd + "'.");
 		}
 	}
 
 	message = canTalk(user, room, connection, message);
 	if (!message) return false;
+	
+//tells
+	var alts = user.getAlts();
+	for (var u in alts) {
+		var alt = toId(alts[u]);
+		if (alt in tells) {
+			if (!tells[user.userid]) tells[user.userid] = [];
+			for (var tell in tells[alt]) {
+				tells[user.userid].add(tells[alt][tell]);
+			}
+			delete tells[alt];
+		}
+	}
+
+	if (tells[user.userid] && user.authenticated) {
+		for (var tell in tells[user.userid]) {
+			connection.sendTo(room, tells[user.userid][tell]);
+		}
+		delete tells[user.userid];
+	}
+
+	if (message) {
+        if (user.isAway === true) {
+        	if (user.name === user.originalName) user.isAway = false; connection.sendTo(user, 'Your name has been left unaltered and no longer marked as away.');
+
+            user.isAway = false;
+            var newName = user.originalName;
+
+            user.forceRename(newName, undefined, true);
+            user.authenticated = true;
+            connection.sendTo(room, '|raw|-- <b><font color="#088cc7">' + newName + '</font color></b> is no longer away');
+            user.originalName = '';
+        }
+    }
 
 	return message;
 };

@@ -88,7 +88,7 @@ exports.BattleScripts = {
 		// For partial trapping moves, we are saving the target
 		if (move.volatileStatus === 'partiallytrapped' && target && target.hp > 0) {
 			// Let's check if the lock exists
-			if (pokemon.volatiles['partialtrappinglock']) {
+			if (pokemon.volatiles['partialtrappinglock'] && target.volatiles['partiallytrapped']) {
 				// Here the partialtrappinglock volatile has been already applied
 				if (!pokemon.volatiles['partialtrappinglock'].locked) {
 					// If it's the first hit, we save the target
@@ -123,7 +123,7 @@ exports.BattleScripts = {
 	useMove: function (move, pokemon, target, sourceEffect) {
 		if (!sourceEffect && this.effect.id) sourceEffect = this.effect;
 		move = this.getMove(move);
-		baseMove = move;
+		var baseMove = move;
 		move = this.getMoveCopy(move);
 		if (!target) target = this.resolveTarget(pokemon, move);
 		if (move.target === 'self' || move.target === 'allies') {
@@ -827,13 +827,12 @@ exports.BattleScripts = {
 			this.heal(Math.ceil(damage * effect.drain[0] / effect.drain[1]), source, target, 'drain');
 		}
 
-		if (target.fainted) this.faint(target);
-		else {
+		if (target.fainted) {
+			this.faint(target);
+		} else {
 			damage = this.runEvent('AfterDamage', target, source, effect, damage);
-			if (effect && !effect.negateSecondary) {
-				this.runEvent('Secondary', target, source, effect);
-			}
 		}
+
 		return damage;
 	},
 	// This is random teams making for gen 1

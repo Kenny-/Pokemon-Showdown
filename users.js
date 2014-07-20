@@ -23,13 +23,13 @@
  * @license MIT license
  */
 
-const THROTTLE_DELAY = 600;
+const THROTTLE_DELAY = 400;
 const THROTTLE_BUFFER_LIMIT = 6;
 const THROTTLE_MULTILINE_WARN = 4;
 
 var fs = require('fs');
 
-var users = {};
+var users = Object.create(null);
 var prevUsers = {};
 var numUsers = 0;
 
@@ -37,6 +37,16 @@ var bannedIps = {};
 var bannedUsers = {};
 var lockedIps = {};
 var lockedUsers = {};
+
+var ipbans = fs.createWriteStream("config/ipbans.txt", {flags: "a"}); // do not remove this line
+
+try {
+	exports.bannedMessages = fs.readFileSync('config/bannedmessages.txt','utf8');
+} catch(e) {
+	exports.bannedMessages = '';
+	fs.writeFileSync('config/bannedmessages.txt','','utf8');
+}
+exports.bannedMessages = exports.bannedMessages.split('\n');
 
 /**
  * Get a user.
@@ -308,6 +318,7 @@ var User = (function () {
 		users[this.userid] = this;
 	}
 
+	User.prototype.namelock = false;
 	User.prototype.isSysop = false;
 	User.prototype.forceRenamed = false;
 
@@ -346,7 +357,7 @@ var User = (function () {
 			return '!' + this.name;
 		}
 		var room = Rooms.rooms[roomid];
-		if (room.auth) {
+		if (room && room.auth) {
 			if (room.auth[this.userid]) {
 				return room.auth[this.userid] + this.name;
 			}
@@ -571,15 +582,12 @@ var User = (function () {
 			Rooms.get(i, 'lobby').onUpdateIdentity(this);
 		}
 	};
-	var bannedNameStartChars = {'~':1, '&':1, '@':1, '%':1, '+':1, '-':1, '!':1, '?':1, '#':1, ' ':1};
 	User.prototype.filterName = function (name) {
 		if (Config.namefilter) {
 			name = Config.namefilter(name);
 		}
 		name = toName(name);
-		while (bannedNameStartChars[name.charAt(0)]) {
-			name = name.substr(1);
-		}
+		name = name.replace(/^[^A-Za-z0-9]+/, "");
 		return name;
 	};
 	/**
@@ -629,6 +637,11 @@ var User = (function () {
 			this.send('|nametaken|' + name + "|Someone is already using the name \"" + users[userid].name + "\".");
 			return false;
 		}
+		
+		if (this.namelock === true) {
+ 			this.send('|nametaken|'+name+"|You are namelock!");
+ 			return false;
+ 		}
 
 		if (token && token.substr(0, 1) !== ';') {
 			var tokenSemicolonPos = token.indexOf(';');
@@ -762,6 +775,7 @@ var User = (function () {
 					if (Object.isEmpty(Object.select(this.ips, user.ips))) {
 						user.mutedRooms = Object.merge(user.mutedRooms, this.mutedRooms);
 						user.muteDuration = Object.merge(user.muteDuration, this.muteDuration);
+						if (this.locked) user.locked = true;
 						this.mutedRooms = {};
 						this.muteDuration = {};
 						this.locked = false;

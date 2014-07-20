@@ -56,9 +56,10 @@ exports.BattleAbilities = {
 		shortDesc: "If this Pokemon is KOed with a contact move, that move's user loses 1/4 its max HP.",
 		id: "aftermath",
 		name: "Aftermath",
-		onFaint: function (target, source, effect) {
-			if (effect && effect.effectType === 'Move' && effect.isContact && source) {
-				this.damage(source.maxhp / 4, source, target);
+		onAfterDamageOrder: 1,
+		onAfterDamage: function (damage, target, source, move) {
+			if (source && source !== target && move && move.isContact && !target.hp) {
+				this.damage(source.maxhp / 4, source, target, null, true);
 			}
 		},
 		rating: 3,
@@ -169,10 +170,10 @@ exports.BattleAbilities = {
 		num: 71
 	},
 	"aromaveil": {
-		desc: "Protects allies from attacks that limit their move choices.",
-		shortDesc: "Protects allies from attacks that limit their move choices.",
+		desc: "Protects this Pokemon and its allies from Attract, Disable, Encore, Heal Block, Taunt, and Torment.",
+		shortDesc: "Protects from Attract, Disable, Encore, Heal Block, Taunt, and Torment.",
 		onAllyTryHit: function (target, source, move) {
-			if (move && move.id in {disable:1, encore:1, healblock:1, imprison:1, taunt:1, torment:1}) {
+			if (move && move.id in {attract:1, disable:1, encore:1, healblock:1, taunt:1, torment:1}) {
 				return false;
 			}
 		},
@@ -186,6 +187,13 @@ exports.BattleAbilities = {
 		shortDesc: "Reverses the effect of Aura abilities.",
 		onStart: function (pokemon) {
 			this.add('-ability', pokemon, 'Aura Break');
+		},
+		onAnyTryPrimaryHit: function (target, source, move) {
+			if (target === source || move.category === 'Status') return;
+			source.addVolatile('aurabreak');
+		},
+		effect: {
+			duration: 1
 		},
 		id: "aurabreak",
 		name: "Aura Break",
@@ -372,10 +380,10 @@ exports.BattleAbilities = {
 	"compoundeyes": {
 		desc: "The accuracy of this Pokemon's moves receives a 30% increase; for example, a 75% accurate move becomes 97.5% accurate.",
 		shortDesc: "This Pokemon's moves have their accuracy boosted to 1.3x.",
-		onModifyMove: function (move) {
-			if (typeof move.accuracy !== 'number') return;
+		onSourceAccuracy: function (accuracy) {
+			if (typeof accuracy !== 'number') return;
 			this.debug('compoundeyes - enhancing accuracy');
-			move.accuracy *= 1.3;
+			return accuracy * 1.3;
 		},
 		id: "compoundeyes",
 		name: "Compound Eyes",
@@ -452,23 +460,10 @@ exports.BattleAbilities = {
 		onStart: function (pokemon) {
 			this.add('-ability', pokemon, 'Dark Aura');
 		},
-		onBasePowerPriority: 8,
-		onAnyBasePower: function (basePower, attacker, defender, move) {
-			var reverseAura = false;
-			for (var p in attacker.side.active) {
-				if (attacker.side.active[p] && attacker.side.active[p].hasAbility('aurabreak')) {
-					reverseAura = true;
-					this.debug('Reversing Dark Aura due to Aura Break');
-				}
-			}
-			for (var p in defender.side.active) {
-				if (defender.side.active[p] && defender.side.active[p].hasAbility('aurabreak')) {
-					reverseAura = true;
-					this.debug('Reversing Dark Aura due to Aura Break');
-				}
-			}
+		onAnyTryPrimaryHit: function (target, source, move) {
+			if (target === source || move.category === 'Status') return;
 			if (move.type === 'Dark') {
-				return this.chainModify(reverseAura? 0.75 : 4 / 3);
+				source.addVolatile('aura');
 			}
 		},
 		id: "darkaura",
@@ -627,23 +622,10 @@ exports.BattleAbilities = {
 		onStart: function (pokemon) {
 			this.add('-ability', pokemon, 'Fairy Aura');
 		},
-		onBasePowerPriority: 8,
-		onAnyBasePower: function (basePower, attacker, defender, move) {
-			var reverseAura = false;
-			for (var p in attacker.side.active) {
-				if (attacker.side.active[p] && attacker.side.active[p].hasAbility('aurabreak')) {
-					reverseAura = true;
-					this.debug('Reversing Fairy Aura due to Aura Break');
-				}
-			}
-			for (var p in defender.side.active) {
-				if (defender.side.active[p] && defender.side.active[p].hasAbility('aurabreak')) {
-					reverseAura = true;
-					this.debug('Reversing Fairy Aura due to Aura Break');
-				}
-			}
+		onAnyTryPrimaryHit: function (target, source, move) {
+			if (target === source || move.category === 'Status') return;
 			if (move.type === 'Fairy') {
-				return this.chainModify(reverseAura? 0.75 : 4 / 3);
+				source.addVolatile('aura');
 			}
 		},
 		id: "fairyaura",
@@ -1210,7 +1192,7 @@ exports.BattleAbilities = {
 		onStart: function (pokemon) {
 			var foeactive = pokemon.side.foe.active;
 			for (var i = 0; i < foeactive.length; i++) {
-				if (!foeactive[i] || foeactive[i].fainted) continue;
+				if (!foeactive[i] || !this.isAdjacent(foeactive[i], pokemon)) continue;
 				if (foeactive[i].volatiles['substitute']) {
 					// does it give a message?
 					this.add('-activate', foeactive[i], 'Substitute', 'ability: Intimidate', '[of] ' + pokemon);
@@ -1231,7 +1213,7 @@ exports.BattleAbilities = {
 		onAfterDamageOrder: 1,
 		onAfterDamage: function (damage, target, source, move) {
 			if (source && source !== target && move && move.isContact) {
-				this.damage(source.maxhp / 8, source, target);
+				this.damage(source.maxhp / 8, source, target, null, true);
 			}
 		},
 		id: "ironbarbs",
@@ -1290,6 +1272,7 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon's held item has no effect, except Macho Brace. Fling cannot be used.",
 		onModifyPokemonPriority: 1,
 		onModifyPokemon: function (pokemon) {
+			if (pokemon.getItem().megaEvolves) return;
 			pokemon.ignore['Item'] = true;
 		},
 		id: "klutz",
@@ -1384,7 +1367,7 @@ exports.BattleAbilities = {
 			this.debug("Heal is occurring: " + target + " <- " + source + " :: " + effect.id);
 			var canOoze = {drain: 1, leechseed: 1};
 			if (canOoze[effect.id]) {
-				this.damage(damage);
+				this.damage(damage, null, null, null, true);
 				return 0;
 			}
 		},
@@ -1448,7 +1431,7 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon steals the held item of a target it hits with a move.",
 		onHit: function (target, source, move) {
 			// We need to hard check if the ability is Magician since the event will be run both ways.
-			if (target && target !== source && move && source.ability === 'magician') {
+			if (target && target !== source && source.ability === 'magician' && move && move.category !== 'Status') {
 				if (source.item) return;
 				var yourItem = target.takeItem(source);
 				if (!yourItem) return;
@@ -1665,7 +1648,9 @@ exports.BattleAbilities = {
 		name: "Mummy",
 		onAfterDamage: function (damage, target, source, move) {
 			if (source && source !== target && move && move.isContact) {
-				if (source.setAbility('mummy', source, 'mummy', true)) {
+				var oldAbility = source.setAbility('mummy', source, 'mummy', true);
+				if (oldAbility) {
+					this.add('-endability', source, oldAbility, '[from] Mummy');
 					this.add('-ability', source, 'Mummy', '[from] Mummy');
 				}
 			}
@@ -1984,12 +1969,10 @@ exports.BattleAbilities = {
 	"protean": {
 		desc: "Right before this Pokemon uses a move, it changes its type to match that move. Hidden Power is interpreted as its Hidden Power type, rather than Normal.",
 		shortDesc: "Right before this Pokemon uses a move, it changes its type to match that move.",
-		onBeforeMove: function (pokemon, target, move) {
-			if (!move || pokemon.volatiles.mustrecharge) return;
-			var moveType = (move.id === 'hiddenpower' ? pokemon.hpType : move.type);
-			if (pokemon.getTypes().join() !== moveType) {
-				if (!pokemon.setType(moveType)) return false;
-				this.add('-start', pokemon, 'typechange', moveType, '[from] Protean');
+		onPrepareHit: function (source, target, move) {
+			if (source.getTypes().join() !== move.type) {
+				if (!source.setType(move.type)) return;
+				this.add('-start', source, 'typechange', move.type, '[from] Protean');
 			}
 		},
 		id: "protean",
@@ -2132,7 +2115,7 @@ exports.BattleAbilities = {
 		onAfterDamageOrder: 1,
 		onAfterDamage: function (damage, target, source, move) {
 			if (source && source !== target && move && move.isContact) {
-				this.damage(source.maxhp / 8, source, target);
+				this.damage(source.maxhp / 8, source, target, null, true);
 			}
 		},
 		id: "roughskin",
@@ -2375,14 +2358,14 @@ exports.BattleAbilities = {
 			},
 			onModifyAtkPriority: 5,
 			onModifyAtk: function (atk, pokemon) {
-				if (!pokemon.hasAbility('slowstart')) {
+				if (pokemon.ignore['Ability'] === true || pokemon.ability !== 'slowstart') {
 					pokemon.removeVolatile('slowstart');
 					return;
 				}
 				return this.chainModify(0.5);
 			},
 			onModifySpe: function (speMod, pokemon) {
-				if (!pokemon.hasAbility('slowstart')) {
+				if (pokemon.ignore['Ability'] === true || pokemon.ability !== 'slowstart') {
 					pokemon.removeVolatile('slowstart');
 					return;
 				}
@@ -2992,7 +2975,7 @@ exports.BattleAbilities = {
 		},
 		effect: {
 			onModifySpe: function (speMod, pokemon) {
-				if (!pokemon.hasAbility('unburden')) {
+				if (pokemon.ignore['Ability'] === true || pokemon.ability !== 'unburden') {
 					pokemon.removeVolatile('unburden');
 					return;
 				}

@@ -199,18 +199,15 @@ exports.BattleMovedex = {
 	curse: {
 		inherit: true,
 		desc: "If the user is not a Ghost-type, lowers the user's Speed by 1 stage and raises the user's Attack and Defense by 1 stage. If the user is a Ghost-type, the user loses 1/2 of its maximum HP, rounded down and even if it would cause fainting, in exchange for one adjacent target losing 1/4 of its maximum HP, rounded down, at the end of each turn while it is active. If the target uses Baton Pass, the replacement will continue to be affected. Fails if there is no target or if the target is already affected or has a Substitute.",
-		effect: {
-			onStart: function (pokemon, source) {
-				if (pokemon.volatiles['substitute']) {
-					this.add('-fail', pokemon);
-					return false;
-				}
-				this.add('-start', pokemon, 'Curse', '[of] ' + source);
-				this.directDamage(source.maxhp / 2, source, source);
-			},
-			onResidualOrder: 10,
-			onResidual: function (pokemon) {
-				this.damage(pokemon.maxhp / 4);
+		onModifyMove: function (move, source, target) {
+			if (!source.hasType('Ghost')) {
+				delete move.volatileStatus;
+				delete move.onHit;
+				move.self = { boosts: {atk:1, def:1, spe:-1}};
+				move.target = move.nonGhostTarget;
+			} else if (target.volatiles['substitute']) {
+				delete move.volatileStatus;
+				delete move.onHit;
 			}
 		},
 		type: "???"
@@ -462,23 +459,27 @@ exports.BattleMovedex = {
 	healingwish: {
 		inherit: true,
 		isSnatchable: false,
+		onAfterMove: function (pokemon) {
+			pokemon.switchFlag = true;
+		},
 		effect: {
-			duration: 2,
+			duration: 1,
 			onStart: function (side) {
 				this.debug('Healing Wish started on ' + side.name);
 			},
-			onSwitchInPriority: -6,
-			// Accounting for the offchance that 5 remaining pokemon are KO'd by entry hazards
+			onSwitchInPriority: -1,
 			onSwitchIn: function (target) {
 				if (target.position != this.effectData.sourcePosition) {
 					return;
 				}
-				if (!target.hp <= 0) {
+				if (target.hp > 0) {
 					var source = this.effectData.source;
 					var damage = target.heal(target.maxhp);
 					target.setStatus('');
 					this.add('-heal', target, target.getHealth, '[from] move: Healing Wish');
 					target.side.removeSideCondition('healingwish');
+				} else {
+					target.switchFlag = true;
 				}
 			}
 		}

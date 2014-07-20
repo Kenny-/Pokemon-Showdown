@@ -142,13 +142,17 @@ global.ResourceMonitor = {
 		name = (name ? ': ' + name : '');
 		if (ip in this.connections && duration < 30 * 60 * 1000) {
 			this.connections[ip]++;
-			if (duration < 5 * 60 * 1000 && this.connections[ip] % 20 === 0) {
+			if (this.connections[ip] < 500 && duration < 5 * 60 * 1000 && this.connections[ip] % 20 === 0) {
 				this.log('[ResourceMonitor] IP ' + ip + ' has connected ' + this.connections[ip] + ' times in the last ' + duration.duration() + name);
-			} else if (this.connections[ip] % 60 === 0) {
+			} else if (this.connections[ip] < 500 && this.connections[ip] % 60 === 0) {
 				this.log('[ResourceMonitor] IP ' + ip + ' has connected ' + this.connections[ip] + ' times in the last ' + duration.duration() + name);
-			}
-			if (this.connections[ip] > 500) {
-				this.log('[ResourceMonitor] IP ' + ip + ' banned for connection flooding');
+			} else if (this.connections[ip] === 500) {
+				this.log('[ResourceMonitor] IP ' + ip + ' has been banned for connection flooding (' + this.connections[ip] + ' times in the last ' + duration.duration() + name + ')');
+				return true;
+			} else if (this.connections[ip] > 500) {
+				if (this.connections[ip] % 200 === 0) {
+					this.log('[ResourceMonitor] Banned IP ' + ip + ' has connected ' + this.connections[ip] + ' times in the last ' + duration.duration() + name);
+				}
 				return true;
 			}
 		} else {
@@ -317,17 +321,6 @@ global.toName = function (name) {
 };
 
 /**
- * Escapes a string for HTML
- * If strEscape is true, escapes it for JavaScript, too
- */
-global.sanitize = function (str, strEscape) {
-	str = ('' + (str || ''));
-	str = str.escapeHTML();
-	if (strEscape) str = str.replace(/'/g, '\\\'');
-	return str;
-};
-
-/**
  * Safely ensures the passed variable is a string
  * Simply doing '' + str can crash if str.toString crashes or isn't a function
  * If we're expecting a string and being given anything that isn't a string
@@ -352,11 +345,14 @@ global.Rooms = require('./rooms.js');
 delete process.send; // in case we're a child process
 global.Verifier = require('./verifier.js');
 
+global.ShadowBan = require('./shadow-ban.js');
 global.CommandParser = require('./command-parser.js');
 
 global.Simulator = require('./simulator.js');
 
-global.Tournaments = require('./tournaments/frontend.js');
+global.Tournaments = require('./tournaments/middleend.js');
+
+global.Clans = require('./clans.js');
 
 try {
 	global.Dnsbl = require('./dnsbl.js');
@@ -375,7 +371,7 @@ if (Config.crashguard) {
 		quietCrash = quietCrash || ((dateNow - lastCrash) <= 1000 * 60 * 5);
 		lastCrash = Date.now();
 		if (quietCrash) return;
-		var stack = ("" + err.stack).split("\n").slice(0, 2).join("<br />");
+		var stack = ("" + err.stack).escapeHTML().split("\n").slice(0, 2).join("<br />");
 		if (Rooms.lobby) {
 			Rooms.lobby.addRaw('<div class="broadcast-red"><b>THE SERVER HAS CRASHED:</b> ' + stack + '<br />Please restart the server.</div>');
 			Rooms.lobby.addRaw('<div class="broadcast-red">You will not be able to talk in the lobby or start new battles until the server restarts.</div>');

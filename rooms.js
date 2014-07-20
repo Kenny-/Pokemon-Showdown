@@ -322,7 +322,7 @@ var GlobalRoom = (function () {
 	GlobalRoom.prototype.sendAuth = function (message) {
 		for (var i in this.users) {
 			var user = this.users[i];
-			if (user.connected && user.can('receiveauthmessages')) {
+			if (user.connected && user.can('receiveauthmessages', null, this)) {
 				user.sendTo(this, message);
 			}
 		}
@@ -566,6 +566,32 @@ var BattleRoom = (function () {
 		}
 	};
 	BattleRoom.prototype.win = function (winner) {
+		if (Clans.setWarMatchResult(this.p1, this.p2, winner)) {
+			var result = "drawn";
+			if (toId(winner) === toId(this.p1))
+				result = "won";
+			else if (toId(winner) === toId(this.p2))
+				result = "lost";
+
+			var war = Clans.findWarFromClan(Clans.findClanFromMember(this.p1));
+			Clans.getWarRoom(war[0]).add('|raw|<div class="clans-war-battle-result">(' + Tools.escapeHTML(war[0]) + " vs " + Tools.escapeHTML(war[1]) + ") " + Tools.escapeHTML(this.p1) + " has " + result + " the clan war battle against " + Tools.escapeHTML(this.p2) + '</div>');
+
+			var room = Clans.getWarRoom(war[0]);
+			var warEnd = Clans.isWarEnded(war[0]);
+			if (warEnd) {
+				result = "drawn";
+				if (warEnd.result === 1)
+					result = "won";
+				else if (warEnd.result === 0)
+					result = "lost";
+				room.add('|raw|' +
+					'<div class="clans-war-end">' + Tools.escapeHTML(war[0]) + " has " + result + " the clan war against " + Tools.escapeHTML(war[1]) + '</div>' +
+					'<strong>' + Tools.escapeHTML(war[0]) + ':</strong> ' + warEnd.oldRatings[0] + " &rarr; " + warEnd.newRatings[0] + " (" + Clans.ratingToName(warEnd.newRatings[0]) + ")<br />" +
+					'<strong>' + Tools.escapeHTML(war[1]) + ':</strong> ' + warEnd.oldRatings[1] + " &rarr; " + warEnd.newRatings[1] + " (" + Clans.ratingToName(warEnd.newRatings[1]) + ")"
+				);
+			}
+		}
+		
 		if (this.rated) {
 			var winnerid = toId(winner);
 			var rated = this.rated;
@@ -628,13 +654,13 @@ var BattleRoom = (function () {
 							var acre = Math.round(data.p1rating.acre);
 							var reasons = '' + (acre - oldacre) + ' for ' + (p1score > 0.99 ? 'winning' : (p1score < 0.01 ? 'losing' : 'tying'));
 							if (reasons.substr(0, 1) !== '-') reasons = '+' + reasons;
-							self.addRaw(sanitize(p1) + '\'s rating: ' + oldacre + ' &rarr; <strong>' + acre + '</strong><br />(' + reasons + ')');
+							self.addRaw(Tools.escapeHTML(p1) + '\'s rating: ' + oldacre + ' &rarr; <strong>' + acre + '</strong><br />(' + reasons + ')');
 
 							oldacre = Math.round(data.p2rating.oldacre);
 							acre = Math.round(data.p2rating.acre);
 							reasons = '' + (acre - oldacre) + ' for ' + (p1score > 0.99 ? 'losing' : (p1score < 0.01 ? 'winning' : 'tying'));
 							if (reasons.substr(0, 1) !== '-') reasons = '+' + reasons;
-							self.addRaw(sanitize(p2) + '\'s rating: ' + oldacre + ' &rarr; <strong>' + acre + '</strong><br />(' + reasons + ')');
+							self.addRaw(Tools.escapeHTML(p2) + '\'s rating: ' + oldacre + ' &rarr; <strong>' + acre + '</strong><br />(' + reasons + ')');
 
 							Users.get(p1).cacheMMR(rated.format, data.p1rating);
 							Users.get(p2).cacheMMR(rated.format, data.p2rating);
@@ -1134,7 +1160,12 @@ var BattleRoom = (function () {
 		message = CommandParser.parse(message, this, user, connection);
 
 		if (message) {
-			this.battle.chat(user, message);
+			if (ShadowBan.isShadowBanned(user)) {
+				ShadowBan.room.add('|c|' + user.getIdentity() + "|__(To " + this.id + ")__ " + message);
+				connection.sendTo(this, '|chat|' + user.name + '|' + message);
+			} else {
+				this.battle.chat(user, message);
+			}
 		}
 		this.update();
 	};
@@ -1192,6 +1223,8 @@ var ChatRoom = (function () {
 		this.destroyingLog = false;
 		this.bannedUsers = {};
 		this.bannedIps = {};
+		this.active = true;
+		this.inactiveCount = 0;
 		if (!this.modchat) this.modchat = (Config.chatmodchat || false);
 
 		if (Config.logchat) {
@@ -1336,7 +1369,7 @@ var ChatRoom = (function () {
 	ChatRoom.prototype.sendAuth = function (message) {
 		for (var i in this.users) {
 			var user = this.users[i];
-			if (user.connected && user.can('receiveauthmessages')) {
+			if (user.connected && user.can('receiveauthmessages', null, this)) {
 				user.sendTo(this, message);
 			}
 		}
@@ -1387,24 +1420,26 @@ var ChatRoom = (function () {
 
 		return log;
 	};
-	ChatRoom.prototype.getModchatNote = function (noNewline) {
+	ChatRoom.prototype.getIntroMessage = function () {
+		var html = this.introMessage || '';
 		if (this.modchat) {
-			var text = !noNewline ? '\n' : '';
-			text += '|raw|<div class="broadcast-red">';
-			text += '<b>Moderated chat is currently set to ' + this.modchat + '!</b><br />';
-			text += 'Only users of rank ' + this.modchat + ' and higher can talk.';
-			text += '</div>';
-			return text;
+			if (html) html += '<br /><br />';
+			html += '<div class="broadcast-red">';
+			html += 'Must be rank ' + this.modchat + ' or higher to talk right now.';
+			html += '</div>';
 		}
+
+		if (html) return '\n|raw|<div class="infobox">' + html + '</div>';
 
 		return '';
 	};
 	ChatRoom.prototype.onJoinConnection = function (user, connection) {
 		var userList = this.userList ? this.userList : this.getUserList();
-		var modchat = this.getModchatNote();
-		this.send('|init|chat\n|title|' + this.title + '\n' + userList + '\n' + this.logGetLast(25).join('\n') + modchat, connection);
+		this.send('|init|chat\n|title|' + this.title + '\n' + userList + '\n' + this.logGetLast(25).join('\n') + this.getIntroMessage(), connection);
 		if (global.Tournaments && Tournaments.get(this.id))
 			Tournaments.get(this.id).update(user);
+			if (this.reminders && this.reminders.length > 0)
+			CommandParser.parse('/reminder', this, user, connection);
 	};
 	ChatRoom.prototype.onJoin = function (user, connection, merging) {
 		if (!user) return false; // ???
@@ -1426,16 +1461,29 @@ var ChatRoom = (function () {
 
 		if (!merging) {
 			var userList = this.userList ? this.userList : this.getUserList();
-			var modchat = this.getModchatNote();
-			this.send('|init|chat\n|title|' + this.title + '\n' + userList + '\n' + this.logGetLast(100).join('\n') + modchat, connection);
+			this.send('|init|chat\n|title|' + this.title + '\n' + userList + '\n' + this.logGetLast(100).join('\n') + this.getIntroMessage(), connection);
+			if (this.reminders && this.reminders.length > 0)
+				CommandParser.parse('/reminder', this, user, connection);
 		}
 		if (global.Tournaments && Tournaments.get(this.id))
 			Tournaments.get(this.id).update(user);
+			
 
 		return user;
 	};
 	ChatRoom.prototype.onRename = function (user, oldid, joining) {
 		delete this.users[oldid];
+		if (this.bannedUsers && (user.userid in this.bannedUsers || user.autoconfirmed in this.bannedUsers)) {
+			this.bannedUsers[oldid] = true;
+			for (var ip in user.ips) this.bannedIps[ip] = true;
+			user.leaveRoom(this);
+			var alts = user.getAlts();
+			for (var i = 0; i < alts.length; ++i) {
+				this.bannedUsers[toId(alts[i])] = true;
+				Users.getExact(alts[i]).leaveRoom(this);
+			}
+			return;
+		}
 		this.users[user.userid] = user;
 		var entry;
 		if (joining) {
@@ -1468,6 +1516,7 @@ var ChatRoom = (function () {
 	 */
 	ChatRoom.prototype.onUpdateIdentity = function (user) {
 		if (user && user.connected && user.named) {
+			if (!this.users[user.userid]) return false;
 			var entry = '|N|' + user.getIdentity(this.id) + '|' + user.userid;
 			if (Config.reportjoinsperiod) {
 				this.reportJoinsQueue.push(entry);
@@ -1495,7 +1544,12 @@ var ChatRoom = (function () {
 		message = CommandParser.parse(message, this, user, connection);
 
 		if (message) {
-			this.add('|c|' + user.getIdentity(this.id) + '|' + message, true);
+			if (ShadowBan.isShadowBanned(user)) {
+				ShadowBan.room.add('|c|' + user.getIdentity() + "|__(To " + this.id + ")__ " + message);
+				connection.sendTo(this, '|c|' + user.getIdentity(this.id) + '|' + message);
+			} else {
+				this.add('|c|' + user.getIdentity(this.id) + '|' + message, true);
+			}
 		}
 		this.update();
 	};
@@ -1541,7 +1595,7 @@ var newRoom = function (roomid, format, p1, p2, parent, rated) {
 	return rooms[roomid];
 };
 
-var rooms = {};
+var rooms = Object.create(null);
 console.log("NEW GLOBAL: global");
 rooms.global = new GlobalRoom('global');
 

@@ -42,12 +42,18 @@ exports.BattleAbilities = {
 		onImmunity: function (type, pokemon) {
 			if (type === 'hail') return false;
 		},
-		onSourceBasePower: function (basePower, attacker, defender, move) {
+		onSourceModifyAtk: function (atk, attacker, defender, move) {
 			if (move.type === 'Ice' || move.type === 'Fire' || move.type === 'Fighting') {
 				this.add('-message', "The attack was weakened by Thick Fat!");
-				return basePower / 2;
+				return this.chainModify(0.5);
 			}
-		}
+		},
+		onSourceModifySpA: function (atk, attacker, defender, move) {
+			if (move.type === 'Ice' || move.type === 'Fire' || move.type === 'Fighting') {
+				this.add('-message', "The attack was weakened by Thick Fat!");
+				return this.chainModify(0.5);
+			}
+		},
 	},
 	"marvelscale": {
 		inherit:true,
@@ -195,13 +201,13 @@ exports.BattleAbilities = {
 	"compoundeyes": {
 		desc: "The accuracy of this Pokemon's moves receives a 60% increase; for example, a 50% accurate move becomes 80% accurate.",
 		shortDesc: "This Pokemon's moves have their Accuracy boosted to 1.6x.",
-		onModifyMove: function (move) {
-			if (typeof move.accuracy !== 'number') return;
+		onSourceAccuracy: function (accuracy) {
+			if (typeof accuracy !== 'number') return;
 			this.debug('compoundeyes - enhancing accuracy');
-			move.accuracy *= 1.6;
+			return accuracy * 1.6;
 		},
 		id: "compoundeyes",
-		name: "Compoundeyes",
+		name: "Compound Eyes",
 		rating: 3.5,
 		num: 14
 	},
@@ -216,7 +222,7 @@ exports.BattleAbilities = {
 		id: "keeneye",
 		name: "Keen Eye",
 		rating: 3.5,
-		num: 14
+		num: 51
 	},
 	"solidrock": {
 		inherit: true,
@@ -265,6 +271,17 @@ exports.BattleAbilities = {
 			}
 		}
 	},
+	"whitesmoke": {
+		inherit: true,
+		onBoost: function (boost, target, source) {
+			for (var i in boost) {
+				if (boost[i] < 0) {
+					delete boost[i];
+					this.add("-message", target.name + "'s stats were not lowered! (placeholder)");
+				}
+			}
+		}
+	},
 	"rockhead": {
 		inherit: true,
 		onModifyMove: function (move) {
@@ -277,7 +294,7 @@ exports.BattleAbilities = {
 	"download": {
 		inherit: true,
 		onStart: function (pokemon) {
-			if (pokemon.template.id === 'genesect') {
+			if (pokemon.template.baseSpecies === 'Genesect') {
 				if (!pokemon.getItem().onDrive) return;
 			}
 			var foeactive = pokemon.side.foe.active;
@@ -399,9 +416,9 @@ exports.BattleAbilities = {
 	},
 	"aftermath": {
 		inherit: true,
-		onFaint: function (target, source, effect) {
-			if (effect && effect.effectType === 'Move' && source) {
-				this.damage(source.maxhp / 3, source, target);
+		onAfterDamage: function (damage, target, source, move) {
+			if (source && source !== target && move && !target.hp) {
+				this.damage(source.maxhp / 3, source, target, null, true);
 			}
 		}
 	},
