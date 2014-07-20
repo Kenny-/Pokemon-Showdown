@@ -23,30 +23,36 @@
  * @license MIT license
  */
 
-const THROTTLE_DELAY = 400;
+/**
+ * Users
+ * Pokemon Showdown - http://pokemonshowdown.com/
+ *
+ * Most of the communication with users happens here.
+ *
+ * There are two object types this file introduces:
+ * User and Connection.
+ *
+ * A User object is a user, identified by username. A guest has a
+ * username in the form "Guest 12". Any user whose username starts
+ * with "Guest" must be a guest; normal users are not allowed to
+ * use usernames starting with "Guest".
+ *
+ * A User can be connected to Pokemon Showdown from any number of tabs
+ * or computers at the same time. Each connection is represented by
+ * a Connection object. A user tracks its connections in
+ * user.connections - if this array is empty, the user is offline.
+ *
+ * Get a user by username with Users.get
+ * (scroll down to its definition for details)
+ *
+ * @license MIT license
+ */
+
+const THROTTLE_DELAY = 600;
 const THROTTLE_BUFFER_LIMIT = 6;
 const THROTTLE_MULTILINE_WARN = 4;
 
 var fs = require('fs');
-
-var users = Object.create(null);
-var prevUsers = {};
-var numUsers = 0;
-
-var bannedIps = {};
-var bannedUsers = {};
-var lockedIps = {};
-var lockedUsers = {};
-
-var ipbans = fs.createWriteStream("config/ipbans.txt", {flags: "a"}); // do not remove this line
-
-try {
-	exports.bannedMessages = fs.readFileSync('config/bannedmessages.txt','utf8');
-} catch(e) {
-	exports.bannedMessages = '';
-	fs.writeFileSync('config/bannedmessages.txt','','utf8');
-}
-exports.bannedMessages = exports.bannedMessages.split('\n');
 
 /**
  * Get a user.
@@ -63,7 +69,7 @@ exports.bannedMessages = exports.bannedMessages.split('\n');
  *
  * If this behavior is undesirable, use Users.getExact.
  */
-function getUser(name, exactName) {
+var Users = module.exports = function(name, exactName) {
 	if (!name || name === '!') return null;
 	if (name && name.userid) return name;
 	var userid = toId(name);
@@ -73,7 +79,13 @@ function getUser(name, exactName) {
 		i++;
 	}
 	return users[userid];
-}
+};
+var getUser = Users.get = Users;
+
+// basic initialization
+var users = Users.users = Object.create(null);
+var prevUsers = Users.prevUsers = Object.create(null);
+var numUsers = 0;
 
 /**
  * Get a user by their exact username.
@@ -87,17 +99,9 @@ function getUser(name, exactName) {
  * true = don't track across username changes, false = do track. This
  * is not recommended since it's less readable.
  */
-function getExactUser(name) {
+var getExactUser = Users.getExact = function(name) {
 	return getUser(name, true);
-}
-
-function searchUser(name) {
-	var userid = toId(name);
-	while (userid && !users[userid]) {
-		userid = prevUsers[userid];
-	}
-	return users[userid];
-}
+};
 
 /*********************************************************
  * Routing
