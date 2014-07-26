@@ -40,6 +40,15 @@ exports.Formats = [
 		name: "Ubers",
 		section: "XY Singles",
 
+		searchShow: false,
+		ruleset: ['Pokemon', 'Standard Ubers', 'Swagger Clause', 'Team Preview'],
+		banlist: []
+	},
+	{
+		name: "Ubers (suspect test)",
+		section: "XY Singles",
+
+		challengeShow: false,
 		ruleset: ['Pokemon', 'Standard Ubers', 'Swagger Clause', 'Team Preview'],
 		banlist: []
 	},
@@ -227,7 +236,7 @@ exports.Formats = [
 		maxForcedLevel: 50,
 		ruleset: ['Pokemon', 'Standard GBU', 'Team Preview VGC', 'Kalos Pokedex'],
 		requirePentagon: true,
-		banlist: [], // The neccessary bans are in Standard GBU
+		banlist: [], // The necessary bans are in Standard GBU
 		validateTeam: function (team, format) {
 			if (team.length < 4) return ['You must bring at least four Pokémon.'];
 		}
@@ -322,8 +331,10 @@ exports.Formats = [
 		section: "XY Triples",
 
 		gameType: 'triples',
-		maxForcedLevel: 50,
+		maxForcedLevel: 30,
 		ruleset: ['Pokemon', 'Standard GBU', 'Team Preview VGC', 'Kalos Pokedex'],
+		requirePentagon: true,
+		banlist: ['Eviolite'],
 		validateTeam: function (team, format) {
 			for (var i = 0; i < team.length; i++) {
 				if (Tools.getTemplate(team[i]).species === 'Pikachu') return;
@@ -609,7 +620,7 @@ exports.Formats = [
 
 		mod: 'gen5',
 		ruleset: ['[Gen 5] OU'],
-		banlist: ['OU', 'BL', 'Drought', 'Sand Stream']
+		banlist: ['OU', 'BL', 'Drought', 'Sand Stream', 'Snow Warning']
 	},
 	{
 		name: "[Gen 5] RU",
