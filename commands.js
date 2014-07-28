@@ -1903,9 +1903,10 @@ var commands = exports.commands = {
 	loadbans: 'viewbanlist',
 	vbl: 'viewbanlist',
 	viewbanlist: function(target, room, user, connection) {
-				if (!this.can('ban')) return false;
-                var ipbans = fs.readFileSync('config/ipbans.txt','utf8');
-                return user.send('|popup|'+ipbans);
+		if (!this.can('ban')) return false;
+		ipbans = fs.readFileSync('config/usergroups.csv','utf8');
+                	var ipbans = fs.readFileSync('config/ipbans.txt','utf8');
+                	return user.send('|popup|'+ipbans+);
 	},
 
 	refreshpage: function (target, room, user) {
