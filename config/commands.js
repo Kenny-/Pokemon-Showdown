@@ -8,7 +8,7 @@
  * A command can be in the form:
  *   ip: 'whois',
  * This is called an alias: it makes it so /ip does the same thing as
- * /whois.sh
+ * /whois.
  *
  * But to actually define a command, it's a function:
  *
@@ -1568,7 +1568,7 @@ var commands = exports.commands = {
 			return this.parse('/help showimage');
 		}
 
-		this.sendReplyBox('|raw|<img src="' + Tools.escapeHTML(targets[0]) + '" alt="" width="' + toId(targets[1]) + '" height="' + toId(targets[2]) + '" />');
+		this.sendReply('|raw|<img src="' + Tools.escapeHTML(targets[0]) + '" alt="" width="' + toId(targets[1]) + '" height="' + toId(targets[2]) + '" />');
 	},
 
 	htmlbox: function (target, room, user) {
