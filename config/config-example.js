@@ -206,8 +206,6 @@ exports.groups = {
 		modchatall: true,
 		rangeban: true,
 		potd: true,
-		tournaments: true,
-		tournamentsmoderation: true,
 		disableladder: true,
 		globalonly: true,
 		rank: 6
@@ -240,7 +238,6 @@ exports.groups = {
 		inherit: '%',
 		jurisdiction: 'u',
 		ban: true,
-		shadowban: true,
 		modchat: true,
 		roomvoice: true,
 		forcerename: true,
