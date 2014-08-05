@@ -53,6 +53,7 @@ const THROTTLE_BUFFER_LIMIT = 6;
 const THROTTLE_MULTILINE_WARN = 4;
 
 var fs = require('fs');
+var dns = require('dns');
 
 /**
  * Get a user.
@@ -161,6 +162,14 @@ Users.socketConnect = function(worker, workerid, socketid, ip) {
 			connection.sendTo(null, '|challstr|' + keyid + '|' + connection.challenge);
 		}
 	});
+
+	dns.reverse(ip, function(err, hosts) {
+		if (hosts && hosts[0]) {
+			user.latestHost = hosts[0];
+			if (Config.hostfilter) Config.hostfilter(hosts[0], user);
+		}
+	});
+
 	user.joinRoom('global', connection);
 
 	Dnsbl.query(connection.ip, function (isBlocked) {
