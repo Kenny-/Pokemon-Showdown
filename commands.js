@@ -1,4 +1,4 @@
-/**
+﻿/**
  * System commands
  * Pokemon Showdown - http://pokemonshowdown.com/
  *
@@ -546,7 +546,6 @@ var commands = exports.commands = {
 	roomintro: function (target, room, user) {
 		if (!target) {
 			if (!this.canBroadcast()) return;
-			var re = /(https?:\/\/(([-\w\.]+)+(:\d+)?(\/([\w/_\.]*(\?\S+)?)?)?))/g;
 			if (!room.introMessage) return this.sendReply("This room does not have an introduction set.");
 			this.sendReplyBox(room.introMessage);
 			if (!this.broadcasting && user.can('declare', null, room)) {
@@ -578,7 +577,7 @@ var commands = exports.commands = {
 		if (!room.chatRoomData) {
 			return this.sendReply("/roomowner - This room isn't designed for per-room moderation to be added");
 		}
-		var target = this.splitTarget(target, true);
+		target = this.splitTarget(target, true);
 		var targetUser = this.targetUser;
 
 		if (!targetUser) return this.sendReply("User '" + this.targetUsername + "' is not online.");
@@ -600,7 +599,7 @@ var commands = exports.commands = {
 		if (!room.auth) {
 			return this.sendReply("/roomdeowner - This room isn't designed for per-room moderation");
 		}
-		var target = this.splitTarget(target, true);
+		target = this.splitTarget(target, true);
 		var targetUser = this.targetUser;
 		var name = this.targetUsername;
 		var userid = toId(name);
@@ -1184,7 +1183,11 @@ var commands = exports.commands = {
 
 		this.addModCommand("" + targetUser.name + " was locked from talking by " + user.name + "." + (target ? " (" + target + ")" : ""));
 		var alts = targetUser.getAlts();
-		if (alts.length) this.privateModCommand("(" + targetUser.name + "'s alts were also locked: " + alts.join(", ") + ")");
+		if (alts.length) {
+			this.privateModCommand("(" + targetUser.name + "'s " + (targetUser.autoconfirmed ? " ac account: " + targetUser.autoconfirmed + ", " : "") + "locked alts: " + alts.join(", ") + ")");
+		} else if (targetUser.autoconfirmed) {
+			this.privateModCommand("(" + targetUser.name + "'s ac account: " + targetUser.autoconfirmed + ")");
+		}
 		this.add('|unlink|' + this.getLastIdOf(targetUser));
 
 		targetUser.lock();
@@ -1286,10 +1289,12 @@ var commands = exports.commands = {
 		this.addModCommand("" + targetUser.name + " was banned by " + user.name + "." + (target ? " (" + target + ")" : ""), " (" + targetUser.latestIp + ")");
 		var alts = targetUser.getAlts();
 		if (alts.length) {
-			this.privateModCommand("(" + targetUser.name + "'s alts were also banned: " + alts.join(", ") + ")");
+			this.privateModCommand("(" + targetUser.name + "'s " + (targetUser.autoconfirmed ? " ac account: " + targetUser.autoconfirmed + ", " : "") + "banned alts: " + alts.join(", ") + ")");
 			for (var i = 0; i < alts.length; ++i) {
 				this.add('|unlink|' + toId(alts[i]));
 			}
+		} else if (targetUser.autoconfirmed) {
+			this.privateModCommand("(" + targetUser.name + "'s ac account: " + targetUser.autoconfirmed + ")");
 		}
 
 		this.add('|unlink|' + this.getLastIdOf(targetUser));
@@ -1355,7 +1360,7 @@ var commands = exports.commands = {
 	 *********************************************************/
 
 	mn: 'modnote',
-	modnote: function (target, room, user, connection, cmd) {
+	modnote: function (target, room, user, connection) {
 		if (!target) return this.parse('/help modnote');
 		if (target.length > MAX_REASON_LENGTH) {
 			return this.sendReply("The note is too long. It cannot exceed " + MAX_REASON_LENGTH + " characters.");
@@ -1448,7 +1453,7 @@ var commands = exports.commands = {
 		case '*':
 		case 'player':
 			target = '\u2605';
-			// fallthrough
+			/* falls through */
 		default:
 			if (!Config.groups[target]) {
 				return this.parse('/help modchat');
@@ -1611,7 +1616,6 @@ var commands = exports.commands = {
 			filename = 'logs/modlog/modlog_' + roomId + '.txt';
 		}
 
-		var roomLogs = {};
 		// Seek for all input rooms for the lines or text
 		command = 'tail -' + lines + ' ' + filename;
 		var grepLimit = 100;
@@ -1646,29 +1650,6 @@ var commands = exports.commands = {
 		});
 	},
 
-	bw: 'banword',
-	banword: function (target, room, user) {
-		if (!this.can('declare')) return false;
-		target = toId(target);
-		if (!target) {
-			return this.sendReply("Specify a word or phrase to ban.");
-		}
-		Users.addBannedWord(target);
-		this.sendReply("Added '" + target + "' to the list of banned words.");
-	},
-
-	ubw: 'unbanword',
-	unbanword: function (target, room, user) {
-		if (!this.can('declare')) return false;
-		target = toId(target);
-		if (!target) {
-			return this.sendReply("Specify a word or phrase to unban.");
-		}
-		Users.removeBannedWord(target);
-		this.sendReply("Removed '" + target + "' from the list of banned words.");
-	},
-
-
 	/*********************************************************
 	 * Server management commands
 	 *********************************************************/
@@ -1683,11 +1664,11 @@ var commands = exports.commands = {
 
 			try {
 				CommandParser.uncacheTree('./command-parser.js');
-				CommandParser = require('./command-parser.js');
+				global.CommandParser = require('./command-parser.js');
 
 				var runningTournaments = Tournaments.tournaments;
 				CommandParser.uncacheTree('./tournaments');
-				Tournaments = require('./tournaments');
+				global.Tournaments = require('./tournaments');
 				Tournaments.tournaments = runningTournaments;
 
 				return this.sendReply("Chat commands have been hot-patched.");
@@ -1700,7 +1681,7 @@ var commands = exports.commands = {
 			try {
 				var runningTournaments = Tournaments.tournaments;
 				CommandParser.uncacheTree('./tournaments');
-				Tournaments = require('./tournaments');
+				global.Tournaments = require('./tournaments');
 				Tournaments.tournaments = runningTournaments;
 				return this.sendReply("Tournaments have been hot-patched.");
 			} catch (e) {
@@ -1717,7 +1698,7 @@ var commands = exports.commands = {
 				// uncache the tools.js dependency tree
 				CommandParser.uncacheTree('./tools.js');
 				// reload tools.js
-				Tools = require('./tools.js'); // note: this will lock up the server for a few seconds
+				global.Tools = require('./tools.js'); // note: this will lock up the server for a few seconds
 				// rebuild the formats list
 				Rooms.global.formatListText = Rooms.global.getFormatListText();
 				// respawn validator processes
@@ -1737,7 +1718,7 @@ var commands = exports.commands = {
 				// uncache the tools.js dependency tree
 				CommandParser.uncacheTree('./tools.js');
 				// reload tools.js
-				Tools = require('./tools.js'); // note: this will lock up the server for a few seconds
+				global.Tools = require('./tools.js'); // note: this will lock up the server for a few seconds
 
 				return this.sendReply("Learnsets have been hotpatched.");
 			} catch (e) {
@@ -1750,7 +1731,7 @@ var commands = exports.commands = {
 
 	savelearnsets: function (target, room, user) {
 		if (!this.can('hotpatch')) return false;
-		fs.writeFile('data/learnsets.js', 'exports.BattleLearnsets = ' + JSON.stringify(BattleLearnsets) + ";\n");
+		fs.writeFile('data/learnsets.js', 'exports.BattleLearnsets = ' + JSON.stringify(Tools.data.Learnsets) + ";\n");
 		this.sendReply("learnsets.js saved.");
 	},
 
@@ -1977,53 +1958,53 @@ var commands = exports.commands = {
 		if (target === 'all') {
 			this.sendReply("Loading memory usage, this might take a while.");
 		}
+		var roomSize, configSize, rmSize, cpSize, simSize, usersSize, toolsSize;
 		if (target === 'all' || target === 'rooms' || target === 'room') {
 			this.sendReply("Calculating Room size...");
-			var roomSize = ResourceMonitor.sizeOfObject(Rooms);
+			roomSize = ResourceMonitor.sizeOfObject(Rooms);
 			this.sendReply("Rooms are using " + roomSize + " bytes of memory.");
 		}
 		if (target === 'all' || target === 'config') {
 			this.sendReply("Calculating config size...");
-			var configSize = ResourceMonitor.sizeOfObject(Config);
+			configSize = ResourceMonitor.sizeOfObject(Config);
 			this.sendReply("Config is using " + configSize + " bytes of memory.");
 		}
 		if (target === 'all' || target === 'resourcemonitor' || target === 'rm') {
 			this.sendReply("Calculating Resource Monitor size...");
-			var rmSize = ResourceMonitor.sizeOfObject(ResourceMonitor);
+			rmSize = ResourceMonitor.sizeOfObject(ResourceMonitor);
 			this.sendReply("The Resource Monitor is using " + rmSize + " bytes of memory.");
 		}
 		if (target === 'all' || target === 'cmdp' || target === 'cp' || target === 'commandparser') {
 			this.sendReply("Calculating Command Parser size...");
-			var cpSize = ResourceMonitor.sizeOfObject(CommandParser);
+			cpSize = ResourceMonitor.sizeOfObject(CommandParser);
 			this.sendReply("Command Parser is using " + cpSize + " bytes of memory.");
 		}
 		if (target === 'all' || target === 'sim' || target === 'simulator') {
 			this.sendReply("Calculating Simulator size...");
-			var simSize = ResourceMonitor.sizeOfObject(Simulator);
+			simSize = ResourceMonitor.sizeOfObject(Simulator);
 			this.sendReply("Simulator is using " + simSize + " bytes of memory.");
 		}
 		if (target === 'all' || target === 'users') {
 			this.sendReply("Calculating Users size...");
-			var usersSize = ResourceMonitor.sizeOfObject(Users);
+			usersSize = ResourceMonitor.sizeOfObject(Users);
 			this.sendReply("Users is using " + usersSize + " bytes of memory.");
 		}
 		if (target === 'all' || target === 'tools') {
 			this.sendReply("Calculating Tools size...");
-			var toolsSize = ResourceMonitor.sizeOfObject(Tools);
+			toolsSize = ResourceMonitor.sizeOfObject(Tools);
 			this.sendReply("Tools are using " + toolsSize + " bytes of memory.");
 		}
 		if (target === 'all' || target === 'v8') {
 			this.sendReply("Retrieving V8 memory usage...");
 			var o = process.memoryUsage();
 			this.sendReply(
-				"Resident set size: " + o.rss + ", " + o.heapUsed + " heap used of " + o.heapTotal  + " total heap. "
-				 + (o.heapTotal - o.heapUsed) + " heap left."
+				"Resident set size: " + o.rss + ", " + o.heapUsed + " heap used of " + o.heapTotal  + " total heap. " +
+				 (o.heapTotal - o.heapUsed) + " heap left."
 			);
-			delete o;
 		}
 		if (target === 'all') {
 			this.sendReply("Calculating Total size...");
-			var total = (roomSize + configSize + rmSize + cpSize + simSize + toolsSize + usersSize) || 0;
+			var total = (roomSize + configSize + rmSize + cpSize + simSize + usersSize + toolsSize) || 0;
 			var units = ["bytes", "K", "M", "G"];
 			var converted = total;
 			var unit = 0;
@@ -2048,7 +2029,7 @@ var commands = exports.commands = {
 		});
 	},
 
-	eval: function (target, room, user, connection, cmd, message) {
+	eval: function (target, room, user, connection) {
 		if (!user.hasConsoleAccess(connection)) {
 			return this.sendReply("/eval - Access denied.");
 		}
@@ -2066,7 +2047,7 @@ var commands = exports.commands = {
 		}
 	},
 
-	evalbattle: function (target, room, user, connection, cmd, message) {
+	evalbattle: function (target, room, user, connection) {
 		if (!user.hasConsoleAccess(connection)) {
 			return this.sendReply("/evalbattle - Access denied.");
 		}
