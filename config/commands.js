@@ -187,6 +187,9 @@ var commands = exports.commands = {
 				output = Object.keys(targetAlt.prevNames).join(", ");
 				if (output) this.sendReply("Previous names: " + output);
 			}
+			if (targetUser.locked) {
+				this.sendReply("Locked under the username: "+targetUser.locked);
+			}
 		}
 		if (Config.groups[targetUser.group] && Config.groups[targetUser.group].name) {
 			this.sendReply("Group: " + Config.groups[targetUser.group].name + " (" + targetUser.group + ")");
@@ -259,6 +262,16 @@ var commands = exports.commands = {
 
 		var buffer = '';
 		var targetId = toId(target);
+		if (targetId === '' + parseInt(targetId)) {
+			for (var p in Tools.data.Pokedex) {
+				var pokemon = Tools.getTemplate(p);
+				if (pokemon.num == parseInt(target)) {
+					target = pokemon.species;
+					targetId = pokemon.id;
+					break;
+				}
+			}
+		}
 		var newTargets = Tools.dataSearch(target);
 		var showDetails = (cmd === 'dt' || cmd === 'details');
 		if (newTargets && newTargets.length) {
