@@ -1236,13 +1236,10 @@ var ChatRoom = (function () {
 		this.logFile = null;
 		this.logFilename = '';
 		this.destroyingLog = false;
-<<<<<<< HEAD
 		this.bannedUsers = {};
 		this.bannedIps = {};
 		this.active = true;
 		this.inactiveCount = 0;
-=======
->>>>>>> a308ab750f81e461bc7d259d3f402caa9c8c32b3
 		if (!this.modchat) this.modchat = (Config.chatmodchat || false);
 
 		if (Config.logchat) {
@@ -1394,12 +1391,9 @@ var ChatRoom = (function () {
 		this.sendUser(connection, '|init|chat\n|title|' + this.title + '\n' + userList + '\n' + this.getLogSlice(-25).join('\n') + this.getIntroMessage());
 		if (global.Tournaments && Tournaments.get(this.id)) {
 			Tournaments.get(this.id).update(user);
-<<<<<<< HEAD
 			if (this.reminders && this.reminders.length > 0)
 			CommandParser.parse('/reminder', this, user, connection);
-=======
 		}
->>>>>>> a308ab750f81e461bc7d259d3f402caa9c8c32b3
 	};
 	ChatRoom.prototype.onJoin = function (user, connection, merging) {
 		if (!user) return false; // ???
@@ -1421,21 +1415,15 @@ var ChatRoom = (function () {
 
 		if (!merging) {
 			var userList = this.userList ? this.userList : this.getUserList();
-<<<<<<< HEAD
 			this.send('|init|chat\n|title|' + this.title + '\n' + userList + '\n' + this.logGetLast(100).join('\n') + this.getIntroMessage(), connection);
 			if (this.reminders && this.reminders.length > 0)
 				CommandParser.parse('/reminder', this, user, connection);
-=======
 			this.sendUser(connection, '|init|chat\n|title|' + this.title + '\n' + userList + '\n' + this.getLogSlice(-100).join('\n') + this.getIntroMessage());
->>>>>>> a308ab750f81e461bc7d259d3f402caa9c8c32b3
 		}
 		if (global.Tournaments && Tournaments.get(this.id)) {
 			Tournaments.get(this.id).update(user);
-<<<<<<< HEAD
 			
-=======
 		}
->>>>>>> a308ab750f81e461bc7d259d3f402caa9c8c32b3
 
 		return user;
 	};
@@ -1509,7 +1497,6 @@ var ChatRoom = (function () {
 			this.logEntry(entry);
 		}
 	};
-<<<<<<< HEAD
 	ChatRoom.prototype.chat = function (user, message, connection) {
 		message = CommandParser.parse(message, this, user, connection);
 
@@ -1524,8 +1511,6 @@ var ChatRoom = (function () {
 		this.update();
 	};
 	ChatRoom.prototype.logEntry = function () {};
-=======
->>>>>>> a308ab750f81e461bc7d259d3f402caa9c8c32b3
 	ChatRoom.prototype.destroy = function () {
 		// deallocate ourself
 
